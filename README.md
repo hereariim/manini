@@ -12,7 +12,7 @@ It is a user-Friendly plugin that enables to manually correct the result of an i
 
 ----------------------------------
 
-This plugin was written by Herearii Metuarea, student intern at LARIS (French laboratory located in Angers, France) in Imhorphen, french scientific team lead by David Rousseau (Full professor). This plugin was designed in the context of the european project INVITE and PHENET.
+This plugin was written by Herearii Metuarea, PHENET engineer at LARIS (French laboratory located in Angers, France) in Imhorphen team, french scientific research team lead by David Rousseau (Full professor). This plugin was designed in the context of the european project INVITE and PHENET.
 
 ![Screenshot from 2023-11-13 00-13-13](https://github.com/hereariim/manini/assets/93375163/c602e802-71b9-48ec-a9f2-cec3e4fa8220)
 
@@ -173,6 +173,11 @@ The Save button allows you to obtain a json file. This file contains for each im
 Distributed under the terms of the [BSD-3] license,
 "manini" is free and open source software
 
+## Citation
+
+Herearii Metuarea, David Rousseau. Toward more collaborative deep learning project management in plant phenotyping. ESS Open Archive . October 31, 2023.
+DOI: 10.22541/essoar.169876925.51005273/v1
+
 ## Issues
 
 If you encounter any problems, please [file an issue] along with a detailed description.
@@ -194,3 +199,4 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 [tox]: https://tox.readthedocs.io/en/latest/
 [pip]: https://pypi.org/project/pip/
 [PyPI]: https://pypi.org/
+
