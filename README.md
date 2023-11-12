@@ -14,6 +14,8 @@ It is a user-Friendly plugin that enables to manually correct the result of an i
 
 This plugin was written by Herearii Metuarea, student intern at LARIS (French laboratory located in Angers, France) in Imhorphen, french scientific team lead by David Rousseau (Full professor). This plugin was designed in the context of the european project INVITE and PHENET.
 
+![Screenshot from 2023-11-13 00-09-44](https://github.com/hereariim/manini/assets/93375163/67fe1938-fd24-483c-844e-6051205a46c4)
+
 The Manini plugin for napari a tool to perform image inference from a pre-trained model (tensorflow .h5) and then annotate the resulting images with the tools provided by napari. Its development is ongoing.
 
 ![Screencast from 24-01-2023 14 00 51](https://user-images.githubusercontent.com/93375163/214298805-8405a923-5952-458c-8542-7c78887479ab.gif)
