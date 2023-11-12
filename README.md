@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/hereariim/manini/branch/main/graph/badge.svg)](https://codecov.io/gh/hereariim/manini)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/manini)](https://napari-hub.org/plugins/manini)
 
-Manini is thought as a tool to boost the collaborative contribution of end-users to the assessment of deep learning model during their testing phase.
+Manini (**MA**chi**N**e Learn**IN**g **I**nterface) is thought as a tool to boost the collaborative contribution of end-users to the assessment of deep learning model during their testing phase.
 It is a user-Friendly plugin that enables to manually correct the result of an inference of deep learning model by an end-user. The plugin covers the following informational tasks: segmentation, classification and object detection.
 
 ----------------------------------
