@@ -7,9 +7,12 @@
 [![codecov](https://codecov.io/gh/hereariim/manini/branch/main/graph/badge.svg)](https://codecov.io/gh/hereariim/manini)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/manini)](https://napari-hub.org/plugins/manini)
 
-An user-friendly plugin that enables to annotate images from pre-trained model (segmentation, classification, detection)
+Manini is thought as a tool to boost the collaborative contribution of end-users to the assessment of deep learning model during their testing phase.
+It is a user-Friendly plugin that enables to manually correct the result of an inference of deep learning model by an end-user. The plugin covers the following informational tasks: segmentation, classification and object detection.
 
 ----------------------------------
+
+This plugin was written by Herearii Metuarea, student intern at LARIS (French laboratory located in Angers, France) in Imhorphen, french scientific team lead by David Rousseau (Full professor). This plugin was designed in the context of the european project INVITE and PHENET.
 
 The Manini plugin for napari a tool to perform image inference from a pre-trained model (tensorflow .h5) and then annotate the resulting images with the tools provided by napari. Its development is ongoing.
 
@@ -71,10 +74,9 @@ The Ok button is used to validate the imported elements. The Run button is used 
 
 #### Processing
 
-Once the image inference is complete, the plugin returns a drop-down menu showing a list of RGB images contained in the compressed file. When the user clicks on an image displayed in this list, two items appear in the napari window:
+Once the image inference is complete, the plugin returns a drop-down menu showing a list of RGB images contained in the compressed file. When the user clicks on an image displayed in this list, one items appear in the napari window:
 
-- A layer label which is the segmentation mask
-- A layer image which is the RGB image
+- A menu that presents a list of the classes given as input
 
 ![cpe](https://user-images.githubusercontent.com/93375163/214246685-e86a9f62-bb27-44b5-92eb-86ef5aa2c663.png)
 
@@ -113,9 +115,8 @@ The Ok button is used to validate the imported elements. The Run button is used 
 
 #### Processing
 
-Once the image inference is complete, the plugin returns two elements :
+Once the image inference is complete, the plugin returns one elements :
 
-- a drop-down menu showing a list of RGB images contained in the compressed file.
 - an table containing the predicted class for each image.
 
 ![cpe2](https://user-images.githubusercontent.com/93375163/214252875-c8e59773-4c3d-4582-b8db-67c59ab01975.png)
@@ -128,25 +129,33 @@ The Save button allows you to obtain a csv file. This file is the table on which
 
 ### Detection
 
-This tool performs image inference from an yolo object detection model. The inference is made from [darknet] command
+This tool performs image inference from an yolo object detection model.
 
 #### Input
 
-This tool offers five mandatory inputs:
+The user must deposit two items (+1 optional item).
 
-- A folder which is the darknet repository images
-- A file (.data) containing the paths (train,validation,test,class) and the number of class
-- A file (.cfg) containing the model architecture
-- A file (.weight) containing the weights associated to the model (.cfg) cited just above
-- A file (.txt) that indicates the path of the images
+- A compressed file (.zip) containing the images in RGB
 
-The Ok button is used to validate the imported elements. The Run button is used to launch the command `./darknet detector test` .
+```
+.
+└── input.zip
+    ├── im_1.JPG
+    ├── im_2.JPG 
+    ├── im_3.JPG
+    ...
+    └── im_n.JPG
+```
+
+- A tensorflow h5 file (.h5) which is the detection model
+- A text file (.txt) containing the names of the classes (optional)
+
+The Ok button is used to validate the imported elements. The Run button is used to launch the segmentation.
 
 #### Processing
 
-When the prediction of bounding box coordinates is complete for each image, the plugin returns two elements:
+When the prediction of bounding box coordinates is complete for each image, the plugin returns one elements:
 
-- A menu that presents a list of the RGB images given as input.
 - A menu that presents a list of the classes given as input
 
 ![Screenshot from 2023-01-24 10-33-07](https://user-images.githubusercontent.com/93375163/214257222-945ed096-49dd-4b91-aa2a-df4c43a30372.png)
