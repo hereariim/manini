@@ -199,7 +199,9 @@ class Run_interface_segmentation:
                 ilastik_version = check_version[0]
                 show_info('ILASTIK VERSION:'+ilastik_version)
                 return ('Image Segmentation',ilastik_version)
-        elif self.model.endswith(".h5"):
+        #elif self.model.endswith(".h5"):
+        #    return ('Image Segmentation','Run tensorflow')
+        else:
             return ('Image Segmentation','Run tensorflow')
     
     def run_tensorflow_segmentation(self,napari_viewer,tensorflow_version,id_uq_seg): 
@@ -222,13 +224,19 @@ class Run_interface_segmentation:
                     image_path = os.path.join(tmp_file.name,listOfFileNames[0])
                         
                     matrix_img = imread(image_path)
-                    or_h,or_w,_  = matrix_img.shape
+                    if len(matrix_img.shape)==2:
+                        or_h,or_w  = matrix_img.shape
+                    else:
+                        or_h,or_w,_  = matrix_img.shape
                         
                     # RESIZE
                     img = resize(matrix_img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
                         
                     # INPUT
-                    X_ensemble = np.zeros((1, IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
+                    if len(matrix_img.shape)==2:
+                        X_ensemble = np.zeros((1, IMG_HEIGHT, IMG_WIDTH), dtype=img.dtype)
+                    else:
+                        X_ensemble = np.zeros((1, IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
                     X_ensemble[0] = img
 
                     # INFERENCE
@@ -246,10 +254,12 @@ class Run_interface_segmentation:
                         final_output = final_output > seuil
                     ## ARGMAX BETWEEN CHANNEL
                     else:
-                        preds_test_t = np.argmax(final_output,axis=2)
+                        preds_test_t = np.argmax(final_output,axis=2)                     
                         for j in range(self.nbr_classe):
                             final_output[:,:,j] = (preds_test_t==j)*j
                         final_output = final_output.sum(axis=2)
+                        final_output = final_output.astype('int') 
+                    print(np.unique(final_output.flatten()))
                     return [
                         napari_viewer.add_image(matrix_img,name="Image_"+str(id_uq_seg)),
                         napari_viewer.add_labels(final_output,name="mask_"+str(id_uq_seg))

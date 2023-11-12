@@ -1,9 +1,9 @@
 name: manini
 display_name: Manini
 # use 'hidden' to remove plugin from napari hub search results
-visibility: public
+# visibility: public
 # see https://napari.org/stable/plugins/manifest.html for valid categories
-categories: ["Annotation", "Segmentation", "Acquisition"]
+# categories: ["Annotation", "Segmentation", "Acquisition"]
 contributions:
   commands:
     - id: manini.manini_widget
@@ -17,4 +17,3 @@ contributions:
       display_name: Manini
     - command: manini.manini_save
       display_name: Export
-
