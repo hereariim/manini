@@ -12,7 +12,9 @@ It is a user-Friendly plugin that enables to manually correct the result of an i
 
 ## White paper
 
-Herearii Metuarea, David Rousseau. Toward more collaborative deep learning project management in plant phenotyping. ESS Open Archive . October 31, 2023.
+Herearii Metuarea, David Rousseau. [Toward more collaborative deep learning project management in plant phenotyping. ](https://essopenarchive.org/doi/full/10.22541/essoar.169876925.51005273/v1)
+
+ESS Open Archive . October 31, 2023.
 DOI: 10.22541/essoar.169876925.51005273/v1
 
 ----------------------------------
@@ -48,7 +50,15 @@ To install latest development version :
 ## Description
 
 This plugin is a tool to perform image inference The inference is open to the model for image segmentation (binary or multiclass), image classification and object detection. The dimension of image should be the same size with the input of model.
-Currently compatible with tensorflow h5 models. In this format, the h5 file must contain all the elements of the model (architecture, weights, etc). Prochain développment : pytorch, etc
+Currently compatible with tensorflow h5 models. In this format, the h5 file must contain all the elements of the model (architecture, weights, etc). several ongoing developments feel free to contact us if you have some request.
+
+## Contact
+
+Imhorphen team, bioimaging research group
+42 rue George Morel, Angers, France
+
+- Pr David Rousseau, david.rousseau@univ-angers.fr
+- Herearii Metuarea, herearii.metuarea@univ-angers.fr 
 
 ### Scheme
 
@@ -99,10 +109,12 @@ The Save button allows you to obtain a csv file. This file is the table on which
 
 Please, you can learn better if you watch a video tutorial below: (link will be presented soon)
 
-Presentation video of the context where the plugin was developped :
+Presentation video of the context where the plugin was developped : [MANINI Napari Plugin Part 1](https://www.youtube.com/watch?v=ltbMIhApwRk)
+
 ![Screenshot from 2023-11-14 11-57-13](https://github.com/hereariim/manini/assets/93375163/0ea9a481-b92b-4f22-bed9-bdb476e3c6d9)
 
-Tutorial video to get started : 
+Tutorial video to get started : [MANINI Napari Plugin Part 2](https://www.youtube.com/watch?v=HU21VQpvRAM)
+
 ![Screenshot from 2023-11-14 11-49-40](https://github.com/hereariim/manini/assets/93375163/f1d3b4e5-abca-425b-a57e-f02fd83e0821)
 
 ## License
