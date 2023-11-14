@@ -100,7 +100,10 @@ The Save button allows you to obtain a csv file. This file is the table on which
 
 Please, you can learn better if you watch a video tutorial below: (link will be presented soon)
 
+Presentation video of the context where the plugin was developped :
 ![Screenshot from 2023-11-14 11-57-13](https://github.com/hereariim/manini/assets/93375163/0ea9a481-b92b-4f22-bed9-bdb476e3c6d9)
+
+Tutorial video to get started : 
 ![Screenshot from 2023-11-14 11-49-40](https://github.com/hereariim/manini/assets/93375163/f1d3b4e5-abca-425b-a57e-f02fd83e0821)
 
 ## License
