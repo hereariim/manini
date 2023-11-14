@@ -55,6 +55,7 @@ Currently compatible with tensorflow h5 models. In this format, the h5 file must
 ## Contact
 
 Imhorphen team, bioimaging research group
+
 42 rue George Morel, Angers, France
 
 - Pr David Rousseau, david.rousseau@univ-angers.fr
@@ -107,7 +108,7 @@ The Save button allows you to obtain a csv file. This file is the table on which
 
 #### Tutorial
 
-Please, you can learn better if you watch a video tutorial below: (link will be presented soon)
+Please, you can learn better if you watch a video tutorial below.
 
 Presentation video of the context where the plugin was developped : [MANINI Napari Plugin Part 1](https://www.youtube.com/watch?v=ltbMIhApwRk)
 
