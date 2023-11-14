@@ -932,24 +932,107 @@ class Run_interface_detection:
         self.colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
 
         # Importer les images
-        with ZipFile(self.image_zip,'r') as zipObject:
-            listOfFileNames = zipObject.namelist()
-            n = len(listOfFileNames)
-            
-            images_data_or = []
-            images_data_rs = []
-            
-            results_mess = []
-            results_coords = []
-            results_color = []
-            SHAPE_h_list = []
-            SHAPE_w_list = []
-            for i in range(n):
-                print(i)
-                zipObject.extract(listOfFileNames[i],path=self.temp_output_dir.name)
-                image_path = os.path.join(self.temp_output_dir.name,listOfFileNames[i])
-                original_image = cv2.imread(image_path)
-                original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+        if self.image_zip.endswith('.zip'):
+            with ZipFile(self.image_zip,'r') as zipObject:
+                listOfFileNames = zipObject.namelist()
+                n = len(listOfFileNames)
+                
+                images_data_or = []
+                images_data_rs = []
+                
+                results_mess = []
+                results_coords = []
+                results_color = []
+                SHAPE_h_list = []
+                SHAPE_w_list = []
+                for i in range(n):
+                    print(i)
+                    zipObject.extract(listOfFileNames[i],path=self.temp_output_dir.name)
+                    image_path = os.path.join(self.temp_output_dir.name,listOfFileNames[i])
+                    original_image = cv2.imread(image_path)
+                    original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+                    h_,w_,_ = original_image.shape
+                    SHAPE_h_list.append(h_)
+                    SHAPE_w_list.append(w_)
+                    images_data_or.append(original_image)
+                    #PREPROCESSING
+                    img_rsz = cv2.resize(original_image,(IMG_HEIGHT, IMG_WIDTH))
+                    img_rsz = img_rsz / 255
+                    images_data_rs = [img_rsz]
+                    images_data_rs = np.asarray(images_data_rs).astype(np.float32)
+                
+                    #PROCESSING
+                    ##DARKNET
+                    batch = tf.constant(images_data_rs)
+                    pred_bbox_ = model_New(batch)
+                
+                    ##NON_MAX_SUPPRESSION
+                    boxes = pred_bbox_[:, :, 0:4]
+                    pred_conf = pred_bbox_[:, :, 4:]
+                    
+                    boxes, scores, classes, valid_detections = tf.image.combined_non_max_suppression(
+                        boxes=tf.reshape(boxes, (tf.shape(boxes)[0], -1, 1, 4)),
+                        scores=tf.reshape(
+                            pred_conf, (tf.shape(pred_conf)[0], -1, tf.shape(pred_conf)[-1])),
+                        max_output_size_per_class=50,
+                        max_total_size=50,
+                        iou_threshold=0.45,
+                        score_threshold=0.25
+                    )
+
+                    pred_bboxes = [boxes.numpy(), scores.numpy(), classes.numpy(), valid_detections.numpy()]
+
+                    random.seed(0)
+                    random.shuffle(self.colors)
+                    random.seed(None)
+                    bbox_rect = []
+                    
+                    image_h, image_w, _ = original_image.shape
+                    out_boxes, out_scores, out_classes, num_boxes = pred_bboxes
+                    for k in range(num_boxes[0]):
+                        if int(out_classes[0][k]) < 0 or int(out_classes[0][k]) > self.num_classes: continue
+                        coor = out_boxes[0][k]
+                        coor[0] = int(coor[0] * image_h) #y1
+                        coor[2] = int(coor[2] * image_h) #y2
+                        coor[1] = int(coor[1] * image_w) #x1
+                        coor[3] = int(coor[3] * image_w) #x2
+                        x1 = coor[1]
+                        x2 = coor[3]
+                        y1 = coor[0]
+                        y2 = coor[2]
+                        
+                        # class BBOX
+                        class_ind = int(out_classes[0][k])
+                        bbox_mess = classes_list[class_ind]
+                        results_mess.append(bbox_mess)
+                        
+                        # color BBOX
+                        class_ind = int(out_classes[0][k])
+                        bbox_color_ = self.colors[class_ind]
+                        bbox_color = [bbox_color_[0]/255,bbox_color_[1]/255,bbox_color_[2]/255]
+                        results_color.append(bbox_color)
+                        
+                        # coords BBOX
+                        bbox_rect.append(np.array([[i,y1, x1], [i,y2, x1], [i,y2, x2], [i,y1, x2]])) # coords BBOX
+                    results_coords+=bbox_rect
+        
+        else:
+            head,image_name = os.path.split(self.image_zip)
+            if "https://" in self.image_zip or "http://" in self.image_zip:                
+                img = Image.open(urlopen(self.image_zip))
+                img.save(os.path.join(self.temp_output_dir.name,"internet.jpg")) 
+                original_image = np.array(img)
+                i=0
+                images_data_or = []
+                images_data_rs = []
+                
+                results_mess = []
+                results_coords = []
+                results_color = []
+                SHAPE_h_list = []
+                SHAPE_w_list = []
+
+                #original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
                 h_,w_,_ = original_image.shape
                 SHAPE_h_list.append(h_)
                 SHAPE_w_list.append(w_)
@@ -959,16 +1042,16 @@ class Run_interface_detection:
                 img_rsz = img_rsz / 255
                 images_data_rs = [img_rsz]
                 images_data_rs = np.asarray(images_data_rs).astype(np.float32)
-            
+                
                 #PROCESSING
                 ##DARKNET
                 batch = tf.constant(images_data_rs)
                 pred_bbox_ = model_New(batch)
-            
+                
                 ##NON_MAX_SUPPRESSION
                 boxes = pred_bbox_[:, :, 0:4]
                 pred_conf = pred_bbox_[:, :, 4:]
-                
+                    
                 boxes, scores, classes, valid_detections = tf.image.combined_non_max_suppression(
                     boxes=tf.reshape(boxes, (tf.shape(boxes)[0], -1, 1, 4)),
                     scores=tf.reshape(
@@ -985,7 +1068,7 @@ class Run_interface_detection:
                 random.shuffle(self.colors)
                 random.seed(None)
                 bbox_rect = []
-                
+                    
                 image_h, image_w, _ = original_image.shape
                 out_boxes, out_scores, out_classes, num_boxes = pred_bboxes
                 for k in range(num_boxes[0]):
@@ -999,22 +1082,24 @@ class Run_interface_detection:
                     x2 = coor[3]
                     y1 = coor[0]
                     y2 = coor[2]
-                    
+                        
                     # class BBOX
                     class_ind = int(out_classes[0][k])
                     bbox_mess = classes_list[class_ind]
                     results_mess.append(bbox_mess)
-                    
+                        
                     # color BBOX
                     class_ind = int(out_classes[0][k])
                     bbox_color_ = self.colors[class_ind]
                     bbox_color = [bbox_color_[0]/255,bbox_color_[1]/255,bbox_color_[2]/255]
                     results_color.append(bbox_color)
-                    
+                        
                     # coords BBOX
                     bbox_rect.append(np.array([[i,y1, x1], [i,y2, x1], [i,y2, x2], [i,y1, x2]])) # coords BBOX
                 results_coords+=bbox_rect
-              
+                listOfFileNames = [1]
+        
+                
         properties = {
             'label': results_mess,
         }
@@ -1076,6 +1161,11 @@ class Run_interface_detection:
         def open_name_classe(item):
             idx = self.LABEL_CATEGORY.index(item.text())
             current_layer_bbx.mode = 'add_rectangle' 
+            # current_layer_bbx.text = item.text()
+            print(current_layer_bbx.properties['label'])
+            # klff = list(current_layer_bbx.properties['label'])
+            # klff.append(item.text())
+            # current_layer_bbx.properties['label'] = np.array(klff,dtype=object)
             current_layer_bbx.current_edge_color = (self.colors[idx][0]/255,self.colors[idx][1]/255,self.colors[idx][2]/255)
             current_class_displayed=None
 
@@ -1346,6 +1436,15 @@ def save_labels(layer_mask,layer_RGB):
         
     elif len(nbr_image)==3:
         assert len(nbr_mask)==2, "NOT A SINGLE MASK"
+        img_array = np.array(layer_RGB)
+        msk_array = np.array(layer_mask)
+        im_RGB = Image.fromarray(img_array)
+        im_msk = Image.fromarray(msk_array)
+            
+        im_RGB1 = im_RGB.save(os.path.join(zip_dir.name,"RGB.png"))
+        im_msk1 = im_msk.save(os.path.join(zip_dir.name,"MSK.png"))
+    elif len(nbr_image)==2:
+        assert len(nbr_mask)>=2, "NOT A SINGLE MASK"
         img_array = np.array(layer_RGB)
         msk_array = np.array(layer_mask)
         im_RGB = Image.fromarray(img_array)
