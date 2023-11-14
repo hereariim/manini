@@ -3,7 +3,7 @@ with open("README.md","r",encoding="utf-8") as fh:
     long_description = fh.read()
 setup(
     name = "manini",
-    version = "0.0.6",
+    version = "0.0.7",
     description = "An user-friendly plugin that enables to annotate images from a pre-trained model (segmentation, classification, detection) given by an user.",
     long_description = long_description,
     long_description_content_type = "text/markdown",
