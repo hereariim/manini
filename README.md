@@ -54,7 +54,6 @@ Currently compatible with tensorflow h5 models. In this format, the h5 file must
 
 ![manini](https://github.com/hereariim/manini/assets/93375163/636a5e15-da0f-4387-8f37-b8ca89b4482b)
 
-
 #### Input
 
 The user must deposit two items (+1 optional item). 
