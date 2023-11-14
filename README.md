@@ -112,11 +112,8 @@ Please, you can learn better if you watch a video tutorial below.
 
 Presentation video of the context where the plugin was developped : [MANINI Napari Plugin Part 1](https://www.youtube.com/watch?v=ltbMIhApwRk)
 
-![Screenshot from 2023-11-14 11-57-13](https://github.com/hereariim/manini/assets/93375163/0ea9a481-b92b-4f22-bed9-bdb476e3c6d9)
-
 Tutorial video to get started : [MANINI Napari Plugin Part 2](https://www.youtube.com/watch?v=HU21VQpvRAM)
 
-![Screenshot from 2023-11-14 11-49-40](https://github.com/hereariim/manini/assets/93375163/f1d3b4e5-abca-425b-a57e-f02fd83e0821)
 
 ## License
 
