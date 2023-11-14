@@ -10,8 +10,6 @@
 Manini (**MA**chi**N**e **IN**ference  & Correct**I**on) is thought as a tool to boost the collaborative contribution of end-users to the assessment of deep learning model during their testing phase.
 It is a user-Friendly plugin that enables to manually correct the result of an inference of deep learning model by an end-user. The plugin covers the following informational tasks: segmentation, classification and object detection.
 
-![Screencast from 24-01-2023 14 00 51](https://user-images.githubusercontent.com/93375163/214298805-8405a923-5952-458c-8542-7c78887479ab.gif)
-
 ## White paper
 
 Herearii Metuarea, David Rousseau. Toward more collaborative deep learning project management in plant phenotyping. ESS Open Archive . October 31, 2023.
@@ -54,6 +52,7 @@ Currently compatible with tensorflow h5 models. In this format, the h5 file must
 
 ### Scheme
 
+![manini](https://github.com/hereariim/manini/assets/93375163/636a5e15-da0f-4387-8f37-b8ca89b4482b)
 
 
 #### Input
@@ -99,15 +98,18 @@ The Save button allows you to obtain a csv file. This file is the table on which
 
 #### Tutorial
 
-Please, you can learn better if you watch a video tutorial below:
+Please, you can learn better if you watch a video tutorial below: (link will be presented soon)
 
+Presentation video of the context where the plugin was developped :
+![Screenshot from 2023-11-14 11-57-13](https://github.com/hereariim/manini/assets/93375163/0ea9a481-b92b-4f22-bed9-bdb476e3c6d9)
+
+Tutorial video to get started : 
+![Screenshot from 2023-11-14 11-49-40](https://github.com/hereariim/manini/assets/93375163/f1d3b4e5-abca-425b-a57e-f02fd83e0821)
 
 ## License
 
 Distributed under the terms of the [BSD-3] license,
 "manini" is free and open source software
-
-
 
 ## Issues
 
