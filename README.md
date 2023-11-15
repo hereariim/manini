@@ -49,8 +49,8 @@ To install latest development version :
 
 ## Description
 
-This plugin is a tool to perform image inference The inference is open to the model for image segmentation (binary or multiclass), image classification and object detection. The dimension of image should be the same size with the input of model.
-Currently compatible with tensorflow h5 models. In this format, the h5 file must contain all the elements of the model (architecture, weights, etc). several ongoing developments feel free to contact us if you have some request.
+This plugin is a tool to perform image inference. The inference is open to the model for image segmentation (binary or multiclass), image classification and object detection. The dimension of image should be the same size with the input of model.
+Currently compatible with tensorflow h5 models. In this format, the h5 file must contain all the elements of the model (architecture, weights, etc). Several ongoing developments, feel free to contact us if you have some request.
 
 ## Contact
 
