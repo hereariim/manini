@@ -211,7 +211,7 @@ class Run_interface_segmentation:
         from skimage import img_as_bool  
 
         model_New = tf.keras.models.load_model(self.model,custom_objects={'dice_coefficient': dice_coefficient})
-        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input.shape) # Taille INPUT
+        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input_shape) # Taille INPUT
         h_p,w_p = get_output_size_image(model_New) # Taille OUTPUT
         self.nbr_classe = list(model_New.output_shape)[-1] # Nombre de classe
  
@@ -596,7 +596,7 @@ class Run_interface_classification:
         
         model_New_load = tf.keras.models.load_model(self.model)
         
-        _, IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C = list(model_New_load.input.shape)
+        _, IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C = list(model_New_load.input_shape)
         
         def create_data(path):
             image_name = []
@@ -921,7 +921,7 @@ class Run_interface_detection:
         import random
        
         model_New = tf.keras.models.load_model(self.model,compile=False)
-        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input.shape) # Taille INPUT
+        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input_shape) # Taille INPUT
         self.nbr_classe = list(model_New.output_shape)[-1] # Nombre de classe
         
         # Affecter les classes dans variable lines
