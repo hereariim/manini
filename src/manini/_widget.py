@@ -643,9 +643,9 @@ class Run_interface_classification:
                 # Preprocessing
                 n = len(image_name_temp) # nombre dimages
                 X = np.zeros((n,IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C))  # An Array for images
-                for ix in list_img:
-                    new_array = cv2.resize(ix, (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
-                    X[i,:,:,:] = new_array
+                for ix in range( len(list_img)):
+                    new_array = cv2.resize(list_img[ix], (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
+                    X[ix,:,:,:] = new_array
                 if X.dtype == "uint16":
                     X_test = X.astype('float32')/65535.
                 else:
