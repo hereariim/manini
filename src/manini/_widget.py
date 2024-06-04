@@ -211,7 +211,7 @@ class Run_interface_segmentation:
         from skimage import img_as_bool  
 
         model_New = tf.keras.models.load_model(self.model,custom_objects={'dice_coefficient': dice_coefficient})
-        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input.shape) # Taille INPUT
+        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input_shape) # Taille INPUT
         h_p,w_p = get_output_size_image(model_New) # Taille OUTPUT
         self.nbr_classe = list(model_New.output_shape)[-1] # Nombre de classe
  
@@ -596,7 +596,7 @@ class Run_interface_classification:
         
         model_New_load = tf.keras.models.load_model(self.model)
         
-        _, IMG_SIZE_H, IMG_SIZE_W,_ = list(model_New_load.input.shape)
+        _, IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C = list(model_New_load.input_shape)
         
         def create_data(path):
             image_name = []
@@ -642,11 +642,14 @@ class Run_interface_classification:
                 
                 # Preprocessing
                 n = len(image_name_temp) # nombre dimages
-                X = np.zeros((n,IMG_SIZE_H, IMG_SIZE_W,3))  # An Array for images
-                for ix in list_img:
-                    new_array = cv2.resize(ix, (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
-                    X[i,:,:,:] = new_array
-                X_test = X.astype('float32')/255.
+                X = np.zeros((n,IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C))  # An Array for images
+                for ix in range( len(list_img)):
+                    new_array = cv2.resize(list_img[ix], (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
+                    X[ix,:,:,:] = new_array
+                if X.dtype == "uint16":
+                    X_test = X.astype('float32')/65535.
+                else:
+                    X_test = X.astype('float32')/255.
                 
                 # Processing
                 dico_pred = {} # dico pred result
@@ -681,11 +684,14 @@ class Run_interface_classification:
                 self.LABEL_CATEGORY = [x.split('\n')[0] for x in lines]
                 
                 # Preprocessing
-                X = np.zeros((1,IMG_SIZE_H, IMG_SIZE_W,3))  # An Array for images
+                X = np.zeros((1,IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C))  # An Array for images
                 new_array = cv2.resize(img_array, (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
                 X[0,:,:,:] = new_array
                 
-                X_test = X.astype('float32')/255.
+                if X.dtype == "uint16":
+                    X_test = X.astype('float32')/65535.
+                else:
+                    X_test = X.astype('float32')/255.
                 
                 # Processing
                 dico_pred = {} # dico pred result
@@ -915,7 +921,7 @@ class Run_interface_detection:
         import random
        
         model_New = tf.keras.models.load_model(self.model,compile=False)
-        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input.shape) # Taille INPUT
+        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input_shape) # Taille INPUT
         self.nbr_classe = list(model_New.output_shape)[-1] # Nombre de classe
         
         # Affecter les classes dans variable lines
@@ -957,7 +963,10 @@ class Run_interface_detection:
                     images_data_or.append(original_image)
                     #PREPROCESSING
                     img_rsz = cv2.resize(original_image,(IMG_HEIGHT, IMG_WIDTH))
-                    img_rsz = img_rsz / 255
+                    if img_rsz.dtype == "uint16":
+                        img_rsz = img_rsz / 65535
+                    else:
+                        img_rsz = img_rsz / 255
                     images_data_rs = [img_rsz]
                     images_data_rs = np.asarray(images_data_rs).astype(np.float32)
                 
@@ -1039,7 +1048,10 @@ class Run_interface_detection:
                 images_data_or.append(original_image)
                 #PREPROCESSING
                 img_rsz = cv2.resize(original_image,(IMG_HEIGHT, IMG_WIDTH))
-                img_rsz = img_rsz / 255
+                if img_rsz.dtype == "uint16":
+                    img_rsz = img_rsz / 65535
+                else:
+                    img_rsz = img_rsz / 255
                 images_data_rs = [img_rsz]
                 images_data_rs = np.asarray(images_data_rs).astype(np.float32)
                 
