@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from napari.utils.notifications import show_info, show_error
 from napari.utils import progress
 from magicgui import magic_factory
-from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget, QLineEdit, QLabel, QFileDialog, QVBoxLayout, QGridLayout, QFormLayout, QGroupBox, QDialog, QSpinBox, QListWidget, QListWidgetItem, QComboBox
+from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget, QLineEdit, QLabel, QFileDialog, QVBoxLayout, QGridLayout, QFormLayout, QGroupBox, QDialog, QSpinBox, QListWidget, QListWidgetItem, QComboBox, QCheckBox
 from qtpy.QtGui import QPalette, QColor
 from magicgui.widgets import Table
 from skimage import img_as_ubyte
@@ -55,6 +55,7 @@ from pandas import DataFrame
 from zipfile import ZipFile        
 from magicgui.tqdm import trange
 from napari.layers import Layer
+from skimage import io
 
 from time import process_time
 from napari.types import ImageData, LabelsData
@@ -92,7 +93,7 @@ class Image_segmentation(QDialog):
         Dedicated tool for image segmentation.
         Import two elements:
         - A compressed file in zip format including only one or more images
-        - A file in h5 format which is an image segmentation model
+        - A file in h5, pt or torchscript format which is an image segmentation model
         - A file in txt format which is located classes names (optional)
         """
         
@@ -139,7 +140,7 @@ class Image_segmentation(QDialog):
             self,
             "Select a File", 
             str(pathlib.Path.home()), 
-            "Model (*.ilp *.h5)"
+            "Model (*.ilp *.h5 *.pt *.torchscript)"
         )
         if filename:
             path = pathlib.Path(filename)
@@ -147,8 +148,10 @@ class Image_segmentation(QDialog):
             name_file = str(path)
             if name_file.endswith(".ilp"):
                 print('Ilastik model DETECTED')
-            elif name_file.endswith(".h5"):
+            elif name_file.endswith(".h5") or name_file.endswith(".keras"):
                 print('Tensorflow model DETECTED')
+            elif name_file.endswith(".pt") or name_file.endswith(".torchscript"):
+                print('Torch model DETECTED')
             else:
                 print('Model NOT DETECTED')
 
@@ -199,11 +202,194 @@ class Run_interface_segmentation:
                 ilastik_version = check_version[0]
                 show_info('ILASTIK VERSION:'+ilastik_version)
                 return ('Image Segmentation',ilastik_version)
-        #elif self.model.endswith(".h5"):
-        #    return ('Image Segmentation','Run tensorflow')
-        else:
+        elif self.model.endswith(".h5") or self.model.endswith(".keras") or self.model.endswith(".tf"):
             return ('Image Segmentation','Run tensorflow')
+        elif self.model.endswith(".pt"):
+            return ('Image Segmentation','Run torch')
     
+    def run_torch_segmentation(self,napari_viewer,torch_version,id_uq_seg): 
+        import torch
+        from skimage.transform import resize
+        from skimage import img_as_bool  
+
+        model_New = torch.jit.load(self.model)
+        model_New.eval()
+
+        if self.image_zip.endswith(".zip"):
+            tmp_file = tempfile.TemporaryDirectory()
+            with ZipFile(self.image_zip,'r') as zipObject:
+                listOfFileNames = zipObject.namelist()
+                if len(listOfFileNames)==1:
+                    zipObject.extract(listOfFileNames[0],path=tmp_file.name)
+                    image_path = os.path.join(tmp_file.name,listOfFileNames[0])
+                    
+                    matrix_img = imread(image_path)
+                    if len(matrix_img.shape)==2:
+                        or_h,or_w  = matrix_img.shape
+                    else:
+                        or_h,or_w,_  = matrix_img.shape
+                    
+                    # INPUT
+                    X_ensemble = matrix_img
+                    if len(X_ensemble.shape) == 3: 
+                        X_ensemble = X_ensemble.transpose([2,0,1])[np.newaxis, ...]
+                    X_ensemble = torch.tensor(X_ensemble.astype(np.float32))
+                    # INFERENCE
+                    preds_test = model_New(X_ensemble)
+                    proba_img = preds_test[0,...]
+                    proba_img = proba_img.permute(1,2,0)
+                    final_output = proba_img.detach().numpy()
+                    
+                    # RESIZE
+                    final_output = proba_img.detach().numpy()
+
+                    self.nbr_classe = final_output.shape[2]
+                    # POST
+                    ## THRESHOLD
+                    if self.nbr_classe==1 == 1:
+                        final_output = final_output[:,:,0]
+                        seuil = np.mean(final_output)
+                        final_output = final_output > seuil
+                    ## ARGMAX BETWEEN CHANNEL
+                    else:
+                        preds_test_t = np.argmax(final_output,axis=2)                     
+                        for j in len(list(proba_img.size())):
+                            final_output[:,:,j] = (preds_test_t==j)*j
+                        final_output = final_output.sum(axis=2)
+                        final_output = final_output.astype('int') 
+                    print(np.unique(final_output.flatten()))
+                    return [
+                        napari_viewer.add_image(matrix_img,name="Image_"+str(id_uq_seg)),
+                        napari_viewer.add_labels(final_output,name="mask_"+str(id_uq_seg))
+                    ]
+                else:
+                    pbar = progress(range(len(listOfFileNames)))
+                    
+                    # INPUT
+                    SHAPE_h_list = []
+                    SHAPE_w_list = [] 
+                    tmp_rgb_image_original = []
+                    for i in pbar:
+                        image_name = listOfFileNames[i]
+                        zipObject.extract(listOfFileNames[i],path=tmp_file.name)
+                        image_path = os.path.join(tmp_file.name,listOfFileNames[i])
+
+                        matrix_img = imread(image_path) #image_path : PNG, JPG GOOD
+                        or_h,or_w,_  = matrix_img.shape
+                        tmp_rgb_image_original.append(matrix_img)
+                        # RESIZE
+                        if 'IMG_RGB_list' not in locals():
+                            IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = matrix_img.shape
+                            IMG_RGB_list = np.zeros((len(listOfFileNames),IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS))
+                            IMG_RGB_list[i,:,:,:] = matrix_img
+                        else:
+                            IMG_RGB_list[i,:,:,:] = matrix_img
+                        SHAPE_h_list.append(or_h)
+                        SHAPE_w_list.append(or_w)
+                
+                    stack_image_rgb = np.zeros((len(listOfFileNames),np.max(SHAPE_h_list),np.max(SHAPE_w_list),IMG_CHANNELS), dtype=np.uint8)
+                    for i in range(len(listOfFileNames)):
+                        stack_image_rgb[i,...]=tmp_rgb_image_original[i]
+                
+                    X_ensemble = IMG_RGB_list
+                    if len(X_ensemble.shape) == 3: 
+                        X_ensemble = X_ensemble.transpose([2,0,1])[np.newaxis, ...]
+                    elif len(X_ensemble.shape) == 4:
+                        X_ensemble = X_ensemble.transpose([0,3,1,2])
+                    X_ensemble = torch.tensor(X_ensemble.astype(np.float32))
+                    # INFERENCE
+                    preds_test = model_New(X_ensemble)
+                    proba_img = preds_test
+                    if len(X_ensemble.shape) == 3: 
+                        proba_img = proba_img.permute(1,2,0)
+                    elif len(X_ensemble.shape) == 4:
+                        proba_img = proba_img.permute(0,3,1,2)
+                    
+                    final_output = proba_img.detach().numpy()
+
+                    PROB_list = np.zeros((len(listOfFileNames),np.max(SHAPE_h_list),np.max(SHAPE_w_list)))
+                    
+                    for i in pbar:
+                        
+                        pr_shape = preds_test.shape
+                        pr_shape_int = len(pr_shape)
+                        or_h, or_w = SHAPE_h_list[i],SHAPE_w_list[i]
+                        # RESIZE
+                        #final_output = resize(preds_test[i,...].detach().numpy(), (or_h, or_w), mode='constant', preserve_range=True)[:,:,0]
+                        final_output = preds_test[i,...].detach().numpy()
+                        PROB_list[i,...] = final_output
+                        print("valeur i")
+                        print(i)
+
+                    #    pbar.set_description("sds")
+                    # POST
+                    print("nombre de classe")
+                    print(len(PROB_list.shape))
+                    self.nbr_classe = PROB_list.shape[2]                                            
+                    ## THRESHOLD
+                    if len(PROB_list.shape)==3:
+                        seuil = np.mean(PROB_list)
+                        stack_masks = PROB_list > seuil
+                        self.nbr_classe = 1
+                    ## ARGMAX BETWEEN CHANNEL
+                    else:
+                        n,_h,_w,_ = PROB_list.shape
+                        stack_maskss = np.zeros((n,_h,_w))
+                        for ix in range(n):
+                            current_stack = PROB_list[ix,...]
+                            preds_test_t = np.argmax(current_stack,axis=2)
+                            for j in range(self.nbr_classe):
+                                current_stack[:,:,j] = (preds_test_t==j)*j
+                            maskss = current_stack.sum(axis=2)
+                            stack_masks[ix,...] = maskss
+                            self.nbr_classe = PROB_list.shape[3]
+                        
+                    return [
+                        napari_viewer.add_image(stack_image_rgb,name="Image_"+str(id_uq_seg)),
+                        napari_viewer.add_labels(stack_masks,name="mask_"+str(id_uq_seg))
+                    ]
+        else:
+            if "https://" in self.image_zip or "http://" in self.image_zip:
+                img = Image.open(urlopen(self.image_zip))
+            else:
+                img = imread(self.image_zip)
+            matrix_img = np.array(img)
+            or_h,or_w,_  = matrix_img.shape
+                          
+            # INPUT
+            X_ensemble = matrix_img
+
+            X_ensemble = matrix_img
+            if len(X_ensemble.shape) == 3: 
+                X_ensemble = X_ensemble.transpose([2,0,1])[np.newaxis, ...]
+            X_ensemble = torch.tensor(X_ensemble.astype(np.float32))
+            # INFERENCE
+            preds_test = model_New(X_ensemble)
+            proba_img = preds_test[0,...]
+            proba_img = proba_img.permute(1,2,0)
+            final_output = proba_img.detach().numpy()
+                    
+            # RESIZE
+            final_output = proba_img.detach().numpy()
+
+            self.nbr_classe = final_output.shape[2]    
+            # POST
+            ## THRESHOLD
+            if self.nbr_classe==1:
+                final_output = final_output[:,:,0]
+                seuil = np.mean(final_output)
+                final_output = final_output > seuil
+            ## ARGMAX BETWEEN CHANNEL
+            else:
+                preds_test_t = np.argmax(final_output,axis=2)
+                for j in range(self.nbr_classe):
+                    final_output[:,:,j] = (preds_test_t==j)*j
+                final_output = final_output.sum(axis=2)
+            return [
+                napari_viewer.add_image(matrix_img,name="Image_"+str(id_uq_seg)),
+                napari_viewer.add_labels(final_output,name="mask_"+str(id_uq_seg))
+            ]
+
     def run_tensorflow_segmentation(self,napari_viewer,tensorflow_version,id_uq_seg): 
         import tensorflow as tf
         from tensorflow.keras import backend as K
@@ -211,7 +397,7 @@ class Run_interface_segmentation:
         from skimage import img_as_bool  
 
         model_New = tf.keras.models.load_model(self.model,custom_objects={'dice_coefficient': dice_coefficient})
-        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input_shape) # Taille INPUT
+        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input.shape) # Taille INPUT
         h_p,w_p = get_output_size_image(model_New) # Taille OUTPUT
         self.nbr_classe = list(model_New.output_shape)[-1] # Nombre de classe
  
@@ -426,7 +612,7 @@ class Run_interface_segmentation:
             idn_classe = [x.split('\n')[0] for x in lines]
             if len(idn_classe)==self.nbr_classe:
                 print("CLASS LABEL REFERENCED")
-                pass
+                idn_classe = ['Brush']+idn_classe
             else:
                 print("TOTAL CLASS LABEL NOT EQUAL TO MODEL")
                 idn_classe = [str(i) if i!=0 else 'Brush' for i in range(slf_nb_class)]
@@ -491,7 +677,7 @@ class Image_classification(QDialog):
         Dedicated tool for image classification.
         Import three required elements:
         - A compressed file in zip format including only one or more images
-        - A file in h5 format which is an image classification model
+        - A file in h5, pt or torchscript format which is an image classification model
         - A file in txt format where we found a list of classes associated to the model
         """
         
@@ -536,7 +722,7 @@ class Image_classification(QDialog):
             self,
             "Select a File", 
             str(pathlib.Path.home()), 
-            "Model (*.h5)"
+            "Model (*.h5 *.pt *.torchscript)"
         )
         if filename:
             path = pathlib.Path(filename)
@@ -544,8 +730,10 @@ class Image_classification(QDialog):
             name_file = str(path)
             if name_file.endswith(".ilp"):
                 print('Ilastik model DETECTED')
-            elif name_file.endswith(".h5"):
+            elif name_file.endswith(".h5") or name_file.endswith(".keras"):
                 print('Tensorflow model DETECTED')
+            elif name_file.endswith('.pt') or name_file.endswith(".torchscript"):
+                print('Torch model DETECTED')
             else:
                 print('Model NOT DETECTED')
 
@@ -585,18 +773,150 @@ class Run_interface_classification:
                 ilastik_version = check_version[0]
                 show_info('ILASTIK VERSION:'+ilastik_version)
                 return (dico[self.idx],ilastik_version)
-        elif self.model.endswith(".h5"):
+        elif self.model.endswith(".h5")  or self.model.endswith(".keras"):
             return (dico[self.idx],'Run tensorflow')
+        elif self.model.endswith(".pt") or self.model.endswith(".tf"):
+            return (dico[self.idx],'Run torch')
     
+    def run_torch_classification(self):
+        import torch
+        import tensorflow as tf
+        import cv2
+        import random
+        
+        if self.model.endswith(".pt"):
+            model_New_load = torch.jit.load(self.model)
+            model_New_load.eval()
+        else:
+            model_New_load = tf.saved_model.load(self.model)
+        
+        def create_data(path):
+            image_name = []
+            data = []
+            A = os.listdir(path)
+            n = len(A)
+            # X = np.zeros((n,IMG_SIZE_H, IMG_SIZE_W,3))  # An Array for images
+            list_img = []
+            for i,img in enumerate(A):  # iterate over each image per plants and weeds
+                img_procee = img.lower()
+                if img_procee.endswith(('.tif','.png','.jpg')):
+                    image_name.append(img)
+                    # img_array = cv2.imread(os.path.join(path,img))  # convert to array 
+                    imgtp = Image.open(os.path.join(path,img))
+                    img_array = np.array(imgtp)
+                    list_img.append(img_array)
+                    # new_array = cv2.resize(img_array, (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
+                    # X[i,:,:,:] = new_array
+            # X = np.array(X).reshape(-1, IMG_SIZE_H, IMG_SIZE_W, 3)  # Reshape data in a form that is suitable for keras
+            # return X,image_name
+            return list_img,image_name
+        
+        if self.image_zip.endswith(".zip"):
+            with ZipFile(self.image_zip,'r') as zipObject:
+                listOfFileNames = zipObject.namelist()
+                
+                # Extraction des images dans un dossier temporaires
+                pbar = progress(range(len(listOfFileNames)))
+                for i in pbar:
+                    image_name = listOfFileNames[i]
+                    zipObject.extract(listOfFileNames[i],path=self.temp_output_dir.name)
+                
+                # Affecter les classes dans variable lines
+                txt_file_path = self.classe_file
+                with open(txt_file_path) as file:
+                    lines = file.readlines()
+                file.close()
+                self.LABEL_CATEGORY = [x.split('\n')[0] for x in lines]
+                
+                # Affecter les images + noms dans variables
+                list_img,image_name = create_data(self.temp_output_dir.name)
+                image_name_temp = [ ix.split(".")[0] for ix in image_name]
+                
+                # Preprocessing
+                X = np.array(list_img)
+                if X.dtype == "uint16":
+                    X_test = X.astype('float32')/65535.
+                else:
+                    X_test = X.astype('float32')/255.
+                X_test = torch.tensor(X_test)
+                if len(X_test.shape) == 3: 
+                    X_test = X_test.permute(2,0,1)[np.newaxis, ...]
+                elif len(X_test.shape) == 4:
+                    X_test = X_test.permute(0,3,1,2)
+                print(X_test.shape)
+
+                # Processing
+                dico_pred = {} # dico pred result
+                n = len(image_name_temp) # nombre dimages
+                m = len(self.LABEL_CATEGORY) # nombre de classes
+                self.prob_class = [] # Probabilite max
+                res_classe = []
+
+                preds_test_ = model_New_load(X_test)       
+                preds_test_ = preds_test_.detach().numpy()
+                for ix in range(n):
+                    prod_res = preds_test_[ix,...]
+                    id_class = np.argmax(prod_res)
+                    self.prob_class.append(np.max(prod_res))
+                    res_classe.append(self.LABEL_CATEGORY[id_class])
+                dico_pred['nom']=image_name_temp
+                dico_pred['prediction']=res_classe
+                dico_pred['prob']=self.prob_class
+
+                self.dico_output_prediction = dico_pred
+                
+        else:
+            head,image_name = os.path.split(self.image_zip)
+            if "https://" in self.image_zip or "http://" in self.image_zip:                
+                img = Image.open(urlopen(self.image_zip))
+                img.save(os.path.join(self.temp_output_dir.name,"internet.jpg")) 
+                img_array = np.array(img)
+                
+                # Affecter les classes dans variable lines
+                txt_file_path = self.classe_file
+                with open(txt_file_path) as file:
+                    lines = file.readlines()
+                file.close()
+                self.LABEL_CATEGORY = [x.split('\n')[0] for x in lines]
+                
+                # Preprocessing
+                X = np.zeros((1,IMG_SIZE_H, IMG_SIZE_W,3))  # An Array for images
+                new_array = cv2.resize(img_array, (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
+                X[0,:,:,:] = new_array
+                
+                if X.dtype == "uint16":
+                    X_test = X.astype('float32')/65535.
+                else:
+                    X_test = X.astype('float32')/255.
+                
+                # Processing
+                dico_pred = {} # dico pred result
+                            
+                preds_test_ = model_New_load.predict(X_test, verbose=1)
+                
+                prod_res = preds_test_[0,...]
+                id_class = np.argmax(prod_res)
+                self.prob_class = [np.max(prod_res)] # Probabilite max
+                res_classe = [self.LABEL_CATEGORY[id_class]]
+                
+                dico_pred['nom']=[image_name]
+                dico_pred['prediction']=res_classe
+                dico_pred['prob']=self.prob_class
+
+                self.dico_output_prediction = dico_pred
+
     def run_tensorflow_classification(self,tensorflow_version):
         import tensorflow as tf
         from tensorflow.keras import backend as K
         import cv2
         import random
         
-        model_New_load = tf.keras.models.load_model(self.model)
-        
-        _, IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C = list(model_New_load.input_shape)
+        if self.model.endswith(".h5"):
+            model_New_load = tf.keras.models.load_model(self.model)
+        else:
+            model_New_load = tf.saved_model.load(self.model)
+        print(self.model)
+        _, IMG_SIZE_H, IMG_SIZE_W,IMG_SIZE_C = list(model_New_load.input_shape)
         
         def create_data(path):
             image_name = []
@@ -642,7 +962,7 @@ class Run_interface_classification:
                 
                 # Preprocessing
                 n = len(image_name_temp) # nombre dimages
-                X = np.zeros((n,IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C))  # An Array for images
+                X = np.zeros((n,IMG_SIZE_H, IMG_SIZE_W,IMG_SIZE_C))  # An Array for images
                 for ix in range( len(list_img)):
                     new_array = cv2.resize(list_img[ix], (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
                     X[ix,:,:,:] = new_array
@@ -684,7 +1004,7 @@ class Run_interface_classification:
                 self.LABEL_CATEGORY = [x.split('\n')[0] for x in lines]
                 
                 # Preprocessing
-                X = np.zeros((1,IMG_SIZE_H, IMG_SIZE_W, IMG_SIZE_C))  # An Array for images
+                X = np.zeros((1,IMG_SIZE_H, IMG_SIZE_W,3))  # An Array for images
                 new_array = cv2.resize(img_array, (IMG_SIZE_H, IMG_SIZE_W))  # resize to normalize data size
                 X[0,:,:,:] = new_array
                 
@@ -815,7 +1135,10 @@ class Object_detection(QDialog):
         self.file_name_class_name = QPushButton("File")
         self.filename_edit_class_name = QLineEdit()  
         self.file_name_class_name.clicked.connect(self.open_file_dialog_class_name)
-        
+
+        self.format_result = QCheckBox("Check if result format is in shape of xyhw (Yolo standart result)",self)
+        self.format_result_check = self.format_result.checkState()
+
         self.ok_btn = QPushButton("OK") #OK
         self.cancel_btn = QPushButton("Cancel") #Cancel
         
@@ -823,10 +1146,11 @@ class Object_detection(QDialog):
         
         notice_utilization = """
         Dedicated tool for object detection.
-        Import two elements:
+        Import three elements:
         - A compressed file in zip format including only one or more images
-        - A file in h5 format which is an object detection model
-        - A file in txt format which is located classes names (optional)
+        - A file in h5, pt or torchscript format which is an object detection model
+        - A file in txt format which is located classes names
+        - Check box to select the bounding box format of the model result
         """
         
         layout.addWidget(QLabel(notice_utilization), 0, 1)        
@@ -836,19 +1160,28 @@ class Object_detection(QDialog):
         layout.addWidget(QLabel("Model:"), 2, 0)        
         layout.addWidget(self.filename_edit_model, 2, 1)
         layout.addWidget(self.file_name_model, 2, 2)
-        layout.addWidget(QLabel("Class (optional):"), 3, 0)        
+        layout.addWidget(QLabel("Class:"), 3, 0)        
         layout.addWidget(self.filename_edit_class_name, 3, 1)
         layout.addWidget(self.file_name_class_name, 3, 2)
+        layout.addWidget(QLabel("Result format:"), 4, 0)        
+        layout.addWidget(self.format_result, 4, 1)
+        self.format_result_checkChange = self.format_result.stateChanged.connect(self.on_checkbox_changed)
         
-        layout.addWidget(self.ok_btn, 4, 1)
-        layout.addWidget(self.cancel_btn, 4, 2)
+        layout.addWidget(self.ok_btn, 5, 1)
+        layout.addWidget(self.cancel_btn, 5, 2)
         self.setLayout(layout)
                
         self.ok_btn.clicked.connect(self.accept) #OK
         self.cancel_btn.clicked.connect(self.reject) #Cancel
         
         self.setFixedHeight(400)
-        
+
+    def on_checkbox_changed(self, value):
+        if self.format_result.checkState():
+            self.format_result_check=self.format_result.isChecked()
+        else:
+            self.format_result_check=self.format_result.isChecked()
+
     def open_file_dialog_image(self):
         filename, ok = QFileDialog.getOpenFileName(
             self,
@@ -872,7 +1205,7 @@ class Object_detection(QDialog):
             self,
             "Select a File", 
             str(pathlib.Path.home()), 
-            "Model (*.ilp *.h5)"
+            "Model (*.ilp *.h5 *.pt *.torchscript)"
         )
         if filename:
             path = pathlib.Path(filename)
@@ -880,8 +1213,10 @@ class Object_detection(QDialog):
             name_file = str(path)
             if name_file.endswith(".ilp"):
                 print('Ilastik model DETECTED')
-            elif name_file.endswith(".h5"):
+            elif name_file.endswith(".h5") or name_file.endswith(".keras"):
                 print('Tensorflow model DETECTED')
+            elif name_file.endswith(".pt") or name_file.endswith(".torchscript"):
+                print('Torch model DETECTED')
             else:
                 print('Model NOT DETECTED')
 
@@ -908,12 +1243,309 @@ class Run_interface_detection:
         self.idx = x #
         self.image_zip = y_list[0] # fichier compresser en zip
         self.model = y_list[1] # fichier .h5 ou .ilp
-        self.classe_file = y_list[2] # fichier txt       
+        self.classe_file = y_list[2] # fichier txt
+        self.format_result = y_list[3]       
         self.napari_current_viewer = current_viewer
         self.temp_output_dir = output_dir 
         self.nbr_classe = None
         self.label_name_current = None
+
+    def run_model(self):
+        dico = {1:'Image Segmentation',2:'Object Classification',3:'Image Classification',4:'Detection'}
+        if self.model.endswith(".ilp"):
+            root_pc = str(pathlib.Path.home()).split("\\")[0]+"\\Program Files"
+            check_version = [ix for ix in os.listdir(root_pc) if ix.find('ilastik')!=-1]
+            if len(check_version)==0:
+                show_info('ILASTIK NOT INSTALLED')
+                return (dico[self.idx],'') #NO ILASTIK INSTALLED
+            else:
+                ilastik_version = check_version[0]
+                show_info('ILASTIK VERSION:'+ilastik_version)
+                return (dico[self.idx],ilastik_version)
+        elif self.model.endswith(".h5")  or self.model.endswith(".keras"):
+            return (dico[self.idx],'Run tensorflow')
+        elif self.model.endswith(".pt") or self.model.endswith(".torchscript"):
+            return (dico[self.idx],'Run torch')
+
+    def run_torch_detection(self,napari_viewer,id_uq_detect):
+        import torch
+        import cv2
+        import colorsys
+        import random
+        import tensorflow as tf
+       
+        model_New = torch.load(self.model)
+
+        # Affecter les classes dans variable lines
+        txt_file_path = self.classe_file
+        with open(txt_file_path) as file:
+            lines = file.readlines()
+        file.close()
+        self.LABEL_CATEGORY = [x.split('\n')[0] for x in lines]
         
+        self.num_classes = len(self.LABEL_CATEGORY)
+        classes_list = {i:self.LABEL_CATEGORY[i] for i in range(self.num_classes)}
+        hsv_tuples = [(1.0 * x / self.num_classes, 1., 1.) for x in range(self.num_classes)]
+        colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+        self.colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+
+        # Importer les images
+        if self.image_zip.endswith('.zip'):
+            print("zip")
+            print(self.image_zip)
+            with ZipFile(self.image_zip,'r') as zipObject:
+                listOfFileNames = zipObject.namelist()
+                n = len(listOfFileNames)
+                
+                images_data_or = []
+                images_data_rs = []
+                
+                results_mess = []
+                results_coords = []
+                results_color = []
+                SHAPE_h_list = []
+                SHAPE_w_list = []
+                for i in range(n):
+                    print(i)
+                    zipObject.extract(listOfFileNames[i],path=self.temp_output_dir.name)
+                    image_path = os.path.join(self.temp_output_dir.name,listOfFileNames[i])
+                    original_image = cv2.imread(image_path)
+                    original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+                    h_,w_,_ = original_image.shape
+                    SHAPE_h_list.append(h_)
+                    SHAPE_w_list.append(w_)
+                    images_data_or.append(original_image)
+                    #PREPROCESSING
+                    
+                    img_rsz = original_image
+                    if img_rsz.dtype == "uint16":
+                        img_rsz = img_rsz / 65535
+                    else:
+                        img_rsz = img_rsz / 255
+                    images_data_rs = [img_rsz]
+                    images_data_rs = np.asarray(images_data_rs).astype(np.float32)
+                
+                    #PROCESSING
+                    ##DARKNET
+                    batch = torch.tensor(images_data_rs)
+                    if len(batch.shape) == 3:
+                        batch = batch.permute(2,0,1)[np.newaxis, ...]
+                    elif len(batch.shape) == 4:
+                        batch = batch.permute(0,3,1,2) 
+                    pred_bbox_ = model_New(batch)
+                    pred_bbox_ = pred_bbox_.permute(0,2,1)
+                    pred_bbox_ = pred_bbox_.numpy()
+
+                    ##NON_MAX_SUPPRESSION
+                    boxes = pred_bbox_[:, :, 0:4]
+                    pred_conf = pred_bbox_[:, :, 4:]
+                    
+                    boxes, scores, classes, valid_detections = tf.image.combined_non_max_suppression(
+                        boxes=tf.reshape(boxes, (tf.shape(boxes)[0], -1, 1, 4)),
+                        scores=tf.reshape(
+                            pred_conf, (tf.shape(pred_conf)[0], -1, tf.shape(pred_conf)[-1])),
+                        max_output_size_per_class=50,
+                        max_total_size=50,
+                        iou_threshold=0.45,
+                        score_threshold=0.25,
+                        clip_boxes=False
+                    )
+
+                    pred_bboxes = [boxes.numpy(), scores.numpy(), classes.numpy(), valid_detections.numpy()]
+
+                    random.seed(0)
+                    random.shuffle(self.colors)
+                    random.seed(None)
+                    bbox_rect = []
+                    image_h, image_w, _ = original_image.shape
+                    out_boxes, out_scores, out_classes, num_boxes = pred_bboxes
+                    for k in range(num_boxes[0]):
+                        if int(out_classes[0][k]) < 0 or int(out_classes[0][k]) > self.num_classes: continue
+                        coor = out_boxes[0][k]
+                        if coor[0] <= 1 and coor[1] <=1:
+                            coor[0] = int(coor[0] * image_h) #y1
+                            coor[2] = int(coor[2] * image_h) #y2
+                            coor[1] = int(coor[1] * image_w) #x1
+                            coor[3] = int(coor[3] * image_w) #x2
+                        if self.format_result:
+                            x1 = coor[0] - coor[2]/2
+                            x2 = coor[0] + coor[2]/2
+                            y1 = coor[1] - coor[3]/2
+                            y2 = coor[1] + coor[3]/2
+                        else:
+                            x1 = coor[1]
+                            x2 = coor[3]
+                            y1 = coor[0]
+                            y2 = coor[2]
+                        
+                        # class BBOX
+                        class_ind = int(out_classes[0][k])
+                        bbox_mess = classes_list[class_ind]
+                        results_mess.append(bbox_mess)
+                        
+                        # color BBOX
+                        class_ind = int(out_classes[0][k])
+                        bbox_color_ = self.colors[class_ind]
+                        bbox_color = [bbox_color_[0]/255,bbox_color_[1]/255,bbox_color_[2]/255]
+                        results_color.append(bbox_color)
+                        
+                        # coords BBOX
+                        bbox_rect.append(np.array([[i,y1, x1], [i,y2, x1], [i,y2, x2], [i,y1, x2]])) # coords BBOX
+                    results_coords+=bbox_rect
+
+        else:
+            head,image_name = os.path.split(self.image_zip)
+            if "https://" in self.image_zip or "http://" in self.image_zip:
+                print("http")
+                print("self.image_zip")                
+                img = Image.open(urlopen(self.image_zip))
+                img.save(os.path.join(self.temp_output_dir.name,"internet.jpg")) 
+                original_image = np.array(img)
+                i=0
+                images_data_or = []
+                images_data_rs = []
+                
+                results_mess = []
+                results_coords = []
+                results_color = []
+                SHAPE_h_list = []
+                SHAPE_w_list = []
+
+                #original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+                h_,w_,_ = original_image.shape
+                SHAPE_h_list.append(h_)
+                SHAPE_w_list.append(w_)
+                images_data_or.append(original_image)
+                #PREPROCESSING
+                #img_rsz = cv2.resize(original_image,(IMG_HEIGHT, IMG_WIDTH))
+                if img_rsz.dtype == "uint16":
+                    img_rsz = img_rsz / 65535
+                else:
+                    img_rsz = img_rsz / 255
+                images_data_rs = [img_rsz]
+                images_data_rs = np.asarray(images_data_rs).astype(np.float32)
+                
+                #PROCESSING
+                ##DARKNET
+                batch = tf.constant(images_data_rs)
+                pred_bbox_ = model_New(batch)
+                pred_bbox_ = pred_bbox_.numpy()
+                ##NON_MAX_SUPPRESSION
+                boxes = pred_bbox_[:, :, 0:4]
+                pred_conf = pred_bbox_[:, :, 4:]
+
+                boxes, scores, classes, valid_detections = tf.image.combined_non_max_suppression(
+                    boxes=tf.reshape(boxes, (tf.shape(boxes)[0], -1, 1, 4)),
+                    scores=tf.reshape(
+                        pred_conf, (tf.shape(pred_conf)[0], -1, tf.shape(pred_conf)[-1])),
+                    max_output_size_per_class=50,
+                    max_total_size=50,
+                    iou_threshold=0.45,
+                    score_threshold=0.25
+                    )
+
+                pred_bboxes = [boxes.numpy(), scores.numpy(), classes.numpy(), valid_detections.numpy()]
+
+                random.seed(0)
+                random.shuffle(self.colors)
+                random.seed(None)
+                bbox_rect = []
+                    
+                image_h, image_w, _ = original_image.shape
+                out_boxes, out_scores, out_classes, num_boxes = pred_bboxes
+                for k in range(num_boxes[0]):
+                    if int(out_classes[0][k]) < 0 or int(out_classes[0][k]) > self.num_classes: continue
+                    coor = out_boxes[0][k]
+                    if coor[0] <= 1 and coor[1] <=1:
+                        coor[0] = int(coor[0] * image_h) #y1
+                        coor[2] = int(coor[2] * image_h) #y2
+                        coor[1] = int(coor[1] * image_w) #x1
+                        coor[3] = int(coor[3] * image_w) #x2
+                    if self.format_result:
+                        x1 = coor[0] - coor[2]/2
+                        x2 = coor[0] + coor[2]/2
+                        y1 = coor[1] - coor[3]/2
+                        y2 = coor[1] + coor[3]/2
+                    else:
+                        x1 = coor[1]
+                        x2 = coor[3]
+                        y1 = coor[0]
+                        y2 = coor[2]
+                        
+                    # class BBOX
+                    class_ind = int(out_classes[0][k])
+                    bbox_mess = classes_list[class_ind]
+                    results_mess.append(bbox_mess)
+                        
+                    # color BBOX
+                    class_ind = int(out_classes[0][k])
+                    bbox_color_ = self.colors[class_ind]
+                    bbox_color = [bbox_color_[0]/255,bbox_color_[1]/255,bbox_color_[2]/255]
+                    results_color.append(bbox_color)
+                        
+                        # coords BBOX
+                    bbox_rect.append(np.array([[i,y1, x1], [i,y2, x1], [i,y2, x2], [i,y1, x2]])) # coords BBOX
+                    results_coords+=bbox_rect
+                    listOfFileNames = [1]
+        
+                
+        properties = {
+            'label': results_mess,
+        }
+        
+        text_parameters = {
+            'string': '{label}',
+            'size': 12,
+            'color': 'red',
+            'anchor': 'upper_left',
+            'translation': [-3, 0]
+        }
+
+        stack_image_rgb = np.zeros((len(listOfFileNames),np.max(SHAPE_h_list),np.max(SHAPE_w_list),3), dtype=np.uint8)
+        for i in range(len(listOfFileNames)): 
+            stack_image_rgb[i,...][:images_data_or[i].shape[0], :images_data_or[i].shape[1]] = images_data_or[i]
+        images_layer = self.napari_current_viewer.add_image(stack_image_rgb,name="Image_"+str(id_uq_detect))
+
+        shapes_layer = self.napari_current_viewer.add_shapes(
+            results_coords,
+            edge_color=results_color,
+            face_color='transparent', edge_width=5,
+            properties=properties,
+            text=text_parameters,
+            name='Result_'+str(id_uq_detect),
+        )
+        
+###
+        # current_layer_bbx = self.napari_current_viewer.layers['Result_'+str(id_uq_detect)]
+            
+        # def open_name_classe(item):
+        #     idx = self.LABEL_CATEGORY.index(item.text())
+        #     current_layer_bbx.mode = 'add_rectangle' 
+        #     current_layer_bbx.current_edge_color = (colors[idx][0]/255,colors[idx][1]/255,colors[idx][2]/255)
+        #     current_class_displayed=None
+
+        # list_class_select = QListWidget()
+        # for n,idx in zip(self.LABEL_CATEGORY,range(num_classes)):
+        #     i = QListWidgetItem(n)
+        #     i.setBackground(QColor(colors[idx][0]/255,colors[idx][1]/255,colors[idx][2]/255))
+        #     list_class_select.addItem(i)
+                        
+        # list_class_select.currentItemChanged.connect(open_name_classe)
+        # self.napari_current_viewer.window.add_dock_widget([list_class_select], area='right',name="Images")
+        # list_class_select.setCurrentRow(0)
+
+###
+        
+        print('END',colors)
+        return [
+                images_layer,
+                shapes_layer  
+                ]
+    # def color_panel(self,id_uq_seg):
+    #     print("==")
+
+
+
     def run_tensorflow_detection(self,napari_viewer,id_uq_detect):
         import tensorflow as tf
         import cv2
@@ -921,7 +1553,7 @@ class Run_interface_detection:
         import random
        
         model_New = tf.keras.models.load_model(self.model,compile=False)
-        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input_shape) # Taille INPUT
+        _, IMG_HEIGHT, IMG_WIDTH,IMG_CHANNELS = list(model_New.input.shape) # Taille INPUT
         self.nbr_classe = list(model_New.output_shape)[-1] # Nombre de classe
         
         # Affecter les classes dans variable lines
@@ -974,7 +1606,7 @@ class Run_interface_detection:
                     ##DARKNET
                     batch = tf.constant(images_data_rs)
                     pred_bbox_ = model_New(batch)
-                
+
                     ##NON_MAX_SUPPRESSION
                     boxes = pred_bbox_[:, :, 0:4]
                     pred_conf = pred_bbox_[:, :, 4:]
@@ -1001,14 +1633,21 @@ class Run_interface_detection:
                     for k in range(num_boxes[0]):
                         if int(out_classes[0][k]) < 0 or int(out_classes[0][k]) > self.num_classes: continue
                         coor = out_boxes[0][k]
-                        coor[0] = int(coor[0] * image_h) #y1
-                        coor[2] = int(coor[2] * image_h) #y2
-                        coor[1] = int(coor[1] * image_w) #x1
-                        coor[3] = int(coor[3] * image_w) #x2
-                        x1 = coor[1]
-                        x2 = coor[3]
-                        y1 = coor[0]
-                        y2 = coor[2]
+                        if coor[0] <= 1 and coor[1] <=1:
+                            coor[0] = int(coor[0] * image_h) #y1
+                            coor[2] = int(coor[2] * image_h) #y2
+                            coor[1] = int(coor[1] * image_w) #x1
+                            coor[3] = int(coor[3] * image_w) #x2
+                        if self.format_result:
+                            x1 = coor[0] - coor[2]/2
+                            x2 = coor[0] + coor[2]/2
+                            y1 = coor[1] - coor[3]/2
+                            y2 = coor[1] + coor[3]/2
+                        else:
+                            x1 = coor[1]
+                            x2 = coor[3]
+                            y1 = coor[0]
+                            y2 = coor[2]
                         
                         # class BBOX
                         class_ind = int(out_classes[0][k])
@@ -1086,14 +1725,21 @@ class Run_interface_detection:
                 for k in range(num_boxes[0]):
                     if int(out_classes[0][k]) < 0 or int(out_classes[0][k]) > self.num_classes: continue
                     coor = out_boxes[0][k]
-                    coor[0] = int(coor[0] * image_h) #y1
-                    coor[2] = int(coor[2] * image_h) #y2
-                    coor[1] = int(coor[1] * image_w) #x1
-                    coor[3] = int(coor[3] * image_w) #x2
-                    x1 = coor[1]
-                    x2 = coor[3]
-                    y1 = coor[0]
-                    y2 = coor[2]
+                    if coor[0] <= 1 and coor[1] <=1:
+                            coor[0] = int(coor[0] * image_h) #y1
+                            coor[2] = int(coor[2] * image_h) #y2
+                            coor[1] = int(coor[1] * image_w) #x1
+                            coor[3] = int(coor[3] * image_w) #x2
+                    if self.format_result:
+                        x1 = coor[0] - coor[2]/2
+                        x2 = coor[0] + coor[2]/2
+                        y1 = coor[1] - coor[3]/2
+                        y2 = coor[1] + coor[3]/2
+                    else:
+                        x1 = coor[1]
+                        x2 = coor[3]
+                        y1 = coor[0]
+                        y2 = coor[2]
                         
                     # class BBOX
                     class_ind = int(out_classes[0][k])
@@ -1257,12 +1903,12 @@ class ManiniWidget(QWidget):
             self._on_click_list = [dialog.filename_edit_image.text(),dialog.filename_edit_model.text(),dialog.filename_edit_class_name.text()]
         
     def _on_click4(self):
-        dialog = Object_detection(self)  
+        dialog = Object_detection(self)
         dialog.exec_()        
         print("Object detection CLOSE")
         if dialog.result() == QDialog.Accepted:
             self._on_click_idx = 4
-            self._on_click_list = [dialog.filename_edit_image.text(),dialog.filename_edit_model.text(),dialog.filename_edit_class_name.text()]
+            self._on_click_list = [dialog.filename_edit_image.text(),dialog.filename_edit_model.text(),dialog.filename_edit_class_name.text(),dialog.format_result_check]
             
     def _on_click_run(self):
         global id_uq_seg
@@ -1274,7 +1920,10 @@ class ManiniWidget(QWidget):
             
             t1_start = process_time() #time start      
             if val2 != 'Run tensorflow':
-                a.run_ilastik(val2) # Run ILASTIK
+                if val2 != 'Run torch':
+                    a.run_ilastik(val2) # Run ILASTIK
+                else:
+                    a.run_torch_segmentation(self.viewer,val2,id_uq_seg)
             else:  
                 a.run_tensorflow_segmentation(self.viewer,val2,id_uq_seg) # Run TENSORFLOW
             t1_stop = process_time() #time stop
@@ -1285,7 +1934,10 @@ class ManiniWidget(QWidget):
             a = Run_interface_classification(self._on_click_idx,self._on_click_list,self.viewer,self.output_directory)
             val1,val2 = a.run_model() # {1:'Image Segmentation',2:'Object Classification',3:'Image Classification',4:'Detection'}
             t1_start = process_time()
-            a.run_tensorflow_classification(val2)
+            if val2 != 'Run tensorflow':
+                a.run_torch_classification()
+            else:
+                a.run_tensorflow_classification(val2)
             t1_stop = process_time() #time stop
             print("TOTAL PROCESSING TIME:",np.round(t1_stop-t1_start,2),"seconds")
             # self.v_table,self.dico_output_prediction = a.image_vis()
@@ -1294,9 +1946,12 @@ class ManiniWidget(QWidget):
             id_uq_detect+=1
             self.output_directory = tempfile.TemporaryDirectory()
             a = Run_interface_detection(self._on_click_idx,self._on_click_list,self.viewer,self.output_directory)
-            # val1,val2 = a.run_model() # {1:'Image Segmentation',2:'Object Classification',3:'Image Classification',4:'Detection'}
+            val1,val2 = a.run_model() # {1:'Image Segmentation',2:'Object Classification',3:'Image Classification',4:'Detection'}
             t1_start = process_time()
-            a.run_tensorflow_detection(self.viewer,id_uq_detect)
+            if val2 != 'Run tensorflow':
+                a.run_torch_detection(self.viewer,id_uq_detect)
+            else:
+                a.run_tensorflow_detection(self.viewer,id_uq_detect)
             t1_stop = process_time() #time stop
             print("TOTAL PROCESSING TIME:",np.round(t1_stop-t1_start,2),"seconds")
             a.color_panel(id_uq_seg)

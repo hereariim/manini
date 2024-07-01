@@ -50,7 +50,7 @@ To install latest development version :
 ## Description
 
 This plugin is a tool to perform image inference. The inference is open to the model for image segmentation (binary or multiclass), image classification and object detection. The dimension of image should be the same size with the input of model.
-Currently compatible with tensorflow h5 models. In this format, the h5 file must contain all the elements of the model (architecture, weights, etc). Several ongoing developments, feel free to contact us if you have some request.
+Currently compatible with tensorflow h5 models and torch torchscript models. In this format, the model file must contain all the elements of the model (architecture, weights, etc). Several ongoing developments, feel free to contact us if you have some request.
 
 ## Contact
 
@@ -81,7 +81,7 @@ The user must deposit two items (+1 optional item).
     └── im_n.JPG
 ```
 
-- A tensorflow h5 file (.h5) which is the segmentation model
+- A model file (.h5 , pt or torchscript) which is the segmentation model
 - A text file (.txt) containing the names of the classes (optional)
 
 The Ok button is used to validate the imported elements. The Run button is used to launch the segmentation.
