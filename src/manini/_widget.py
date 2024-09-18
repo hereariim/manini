@@ -486,6 +486,7 @@ class Run_interface_segmentation:
                         pr_shape = preds_test.shape
                         pr_shape_int = len(pr_shape)
                         or_h, or_w = SHAPE_h_list[i],SHAPE_w_list[i]
+                        print(model_New.summary())
                         # RESIZE
                         final_output = resize(preds_test[i,...], (or_h, or_w), mode='constant', preserve_range=True)[:,:,0]
                         PROB_list[i,...] = final_output
