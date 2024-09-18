@@ -474,7 +474,8 @@ class Run_interface_segmentation:
                     
                     stack_image_rgb = np.zeros((len(listOfFileNames),np.max(SHAPE_h_list),np.max(SHAPE_w_list),IMG_CHANNELS), dtype=np.uint8)
                     for i in range(len(listOfFileNames)):
-                        stack_image_rgb[i,...]=tmp_rgb_image_original[i]
+                        h_,w_,c_ = tmp_rgb_image_original[i].shape
+                        stack_image_rgb[i,:h_,:w_,:]=tmp_rgb_image_original[i]
                     
                     # INFERENCE
                     preds_test = model_New.predict(IMG_RGB_list, verbose=1)
