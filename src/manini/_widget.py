@@ -1500,7 +1500,7 @@ class Run_interface_detection:
             'size': 12,
             'color': 'red',
             'anchor': 'upper_left',
-            'translation': [-3, 0]
+            # 'translation': [-3, 0]
         }
 
         stack_image_rgb = np.zeros((len(listOfFileNames),np.max(SHAPE_h_list),np.max(SHAPE_w_list),3), dtype=np.uint8)
@@ -1769,7 +1769,7 @@ class Run_interface_detection:
             'size': 12,
             'color': 'red',
             'anchor': 'upper_left',
-            'translation': [-3, 0]
+            #'translation': [-3, 0]
         }
 
         stack_image_rgb = np.zeros((len(listOfFileNames),np.max(SHAPE_h_list),np.max(SHAPE_w_list),IMG_CHANNELS), dtype=np.uint8)
